@@ -2,7 +2,6 @@ const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const { Client, LocalAuth } = require('whatsapp-web.js');
-const qrcode = require('qrcode-terminal');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -56,11 +55,12 @@ const client = new Client({
     }
 });
 
+// Génération d'un lien web cliquable propre pour le QR Code
 client.on('qr', (qr) => {
-    console.log('\n========================================');
-    console.log('SCANNEZ CE QR CODE DANS LES LOGS RAILWAY :');
-    console.log('========================================\n');
-    qrcode.generate(qr, { small: true });
+    console.log('\n================================================================');
+    console.log('CLIQUEZ SUR CE LIEN POUR OUVRIR LE QR CODE EN GRAND ET LE SCANNER :');
+    console.log(`https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qr)}`);
+    console.log('================================================================\n');
 });
 
 client.on('ready', () => {
