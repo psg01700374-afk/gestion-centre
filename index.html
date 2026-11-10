@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Gestion Centre de Soutien</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-100 min-h-screen p-6">
+    <div class="max-w-6xl mx-auto">
+        <h1 class="text-3xl font-bold text-slate-800 mb-6">📚 Gestion des Paiements - Centre de Soutien</h1>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <!-- Formulaire -->
+            <div class="bg-white p-6 rounded-lg shadow h-fit">
+                <h2 class="text-xl font-bold mb-4">Ajouter un Élève</h2>
+                <form id="form-eleve" class="space-y-3">
+                    <input type="text" id="nom" placeholder="Nom de l'élève" required class="w-full p-2 border rounded">
+                    
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-500 mb-1">Niveau</label>
+                        <select id="niveau" class="w-full p-2 border rounded">
+                            <option value="1AC">1AC</option>
+                            <option value="2AC">2AC</option>
+                            <option value="3AC">3AC</option>
+                            <option value="TC">Tronc Commun (TC)</option>
+                            <option value="1BAC">1BAC</option>
+                            <option value="2BAC">2BAC</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-500 mb-1">Type de cours</label>
+                        <select id="type_cours" class="w-full p-2 border rounded">
+                            <option value="Groupe">Groupe</option>
+                            <option value="Individuel">Individuel</option>
+                        </select>
+                    </div>
+
+                    <input type="number" id="tarif" placeholder="Tarif mensuel (DH)" required class="w-full p-2 border rounded">
+                    <button type="submit" class="w-full bg-blue-600 text-white p-2 rounded font-bold hover:bg-blue-700">Ajouter</button>
+                </form>
+            </div>
+
+            <!-- Liste des élèves avec Filtres par Niveau -->
+            <div class="md:col-span-2 bg-white p-6 rounded-lg shadow">
+                <div class="flex flex-col sm:flex-row justify-between items-center mb-4 gap-3">
+                    <h2 class="text-xl font-bold">Liste des Élèves</h2>
+                    <div class="flex gap-2">
+                        <select id="filtre-niveau" class="p-2 border rounded font-semibold text-sm bg-slate-50" onchange="chargerEleves()">
+                            <option value="TOUS">Tous les niveaux</option>
+                            <option value="1AC">1AC</option>
+                            <option value="2AC">2AC</option>
+                            <option value="3AC">3AC</option>
+                            <option value="TC">Tronc Commun (TC)</option>
+                            <option value="1BAC">1BAC</option>
+                            <option value="2BAC">2BAC</option>
+                        </select>
+                        <input type="month" id="mois-select" class="p-2 border rounded text-sm" onchange="chargerEleves()">
+                    </div>
+                </div>
+
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="border-b bg-slate-50 text-sm">
+                            <th class="p-2">Nom</th>
+                            <th class="p-2">Niveau / Type</th>
+                            <th class="p-2">Tarif</th>
+                            <th class="p-2">Statut</th>
+                            <th class="p-2">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="table-eleves" class="text-sm"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('mois-select').value = new Date().toISOString().slice(0, 7);
+
+        async function chargerEleves() {
+            const mois = document.getElementById('mois-select').value;
+            const niveauFiltre = document.getElementById('filtre-niveau').value;
+            
+            const res = await fetch(`/api/eleves?mois=${mois}`);
+            let data = await res.json();
+
+            if (niveauFiltre !== 'TOUS') {
+                data = data.filter(e => e.niveau === niveauFiltre);
+            }
+
+            const tbody = document.getElementById('table-eleves');
+            tbody.innerHTML = '';
+
+            if (data.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-slate-400">Aucun élève trouvé pour ce filtre.</td></tr>`;
+                return;
+            }
+
+            data.forEach(e => {
+                const paye = e.paiement_id != null;
+                tbody.innerHTML += `
+                    <tr class="border-b hover:bg-slate-50">
+                        <td class="p-2 font-semibold text-slate-700">${e.nom}</td>
+                        <td class="p-2">
+                            <span class="bg-blue-100 text-blue-800 px-2 py-0.5 rounded text-xs font-bold">${e.niveau}</span>
+                            <span class="text-xs text-slate-500 ml-1">(${e.type_cours})</span>
+                        </td>
+                        <td class="p-2 font-medium">${e.tarif_mensuel} DH</td>
+                        <td class="p-2">
+                            <span class="px-2 py-1 text-xs font-bold rounded ${paye ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
+                                ${paye ? 'Payé (' + e.montant_paye + ' DH)' : 'Non Payé'}
+                            </span>
+                        </td>
+                        <td class="p-2 space-x-1">
+                            <button onclick="payer(${e.id}, ${e.tarif_mensuel})" class="bg-green-600 text-white px-2 py-1 rounded text-xs hover:bg-green-700">Payer</button>
+                            <button onclick="supprimer(${e.id})" class="bg-red-500 text-white px-2 py-1 rounded text-xs hover:bg-red-600">X</button>
+                        </td>
+                    </tr>
+                `;
+            });
+        }
+
+        document.getElementById('form-eleve').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            await fetch('/api/eleves', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    nom: document.getElementById('nom').value,
+                    niveau: document.getElementById('niveau').value,
+                    type_cours: document.getElementById('type_cours').value,
+                    tarif_mensuel: document.getElementById('tarif').value
+                })
+            });
+            document.getElementById('form-eleve').reset();
+            chargerEleves();
+        });
+
+        async function payer(eleve_id, tarif) {
+            const montant = prompt("Montant payé (DH) :", tarif);
+            if (montant !== null) {
+                const mois = document.getElementById('mois-select').value;
+                await fetch('/api/paiements', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ eleve_id, mois, montant_paye: montant })
+                });
+                chargerEleves();
+            }
+        }
+
+        async function supprimer(id) {
+            if (confirm("Supprimer cet élève ?")) {
+                await fetch(`/api/eleves/${id}`, { method: 'DELETE' });
+                chargerEleves();
+            }
+        }
+
+        chargerEleves();
+    </script>
+</body>
+</html>
