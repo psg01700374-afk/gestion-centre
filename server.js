@@ -1,9 +1,11 @@
 const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
+const { Client, LocalAuth } = require('whatsapp-web.js');
+const qrcode = require('qrcode-terminal');
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -13,7 +15,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 const dbFile = path.join(__dirname, 'database.sqlite');
 const db = new sqlite3.Database(dbFile, (err) => {
     if (!err) {
-        console.log('Connecté à la base de données locale.');
+        console.log('Connecté à la base de données SQLite.');
         initDb();
     }
 });
@@ -37,7 +39,83 @@ function initDb() {
     )`);
 }
 
-// Routes API
+// --- BOT WHATSAPP ---
+const client = new Client({
+    authStrategy: new LocalAuth(),
+    puppeteer: {
+        args: ['--no-sandbox', '--disable-setuid-sandbox']
+    }
+});
+
+client.on('qr', (qr) => {
+    console.log('\n========================================');
+    console.log('SCANNEZ CE QR CODE DANS LES LOGS RAILWAY :');
+    console.log('========================================\n');
+    qrcode.generate(qr, { small: true });
+});
+
+client.on('ready', () => {
+    console.log('✅ Bot WhatsApp connecté et actif 24h/24 !');
+});
+
+// Commandes WhatsApp
+client.on('message', async message => {
+    const texte = message.body.trim().toLowerCase();
+    const parts = message.body.trim().split(' ');
+
+    // 1. Ajouter un élève : "ajoute Youssef 2BAC 300"
+    if (texte.startsWith('ajoute') || texte.startsWith('+')) {
+        const nom = parts[1];
+        const niveau = parts[2] ? parts[2].toUpperCase() : '2BAC';
+        const tarif = parts[3] ? parseFloat(parts[3]) : 300;
+
+        if (!nom) {
+            message.reply("❌ Précisez le nom. Exemple : `ajoute Youssef 2BAC 300`");
+            return;
+        }
+
+        db.run(`INSERT INTO eleves (nom, niveau, type_cours, tarif_mensuel) VALUES (?, ?, 'Groupe', ?)`,
+            [nom, niveau, tarif], function(err) {
+                if (err) message.reply("Erreur d'enregistrement.");
+                else message.reply(`✅ Élève *${nom}* (${niveau}) ajouté avec un tarif de *${tarif} DH*.`);
+            });
+    }
+
+    // 2. Marquer comme payé : "paye Youssef"
+    else if (texte.includes('paye') || texte.includes('payé')) {
+        const mots = message.body.trim().split(' ');
+        const nomRecherche = mots.find(m => !['paye', 'payé', 'a', 'le'].includes(m.toLowerCase()));
+
+        if (!nomRecherche) {
+            message.reply("❌ Précisez le nom. Exemple : `paye Youssef`");
+            return;
+        }
+
+        const moisActuel = new Date().toISOString().slice(0, 7);
+
+        db.get(`SELECT * FROM eleves WHERE nom LIKE ?`, [`%${nomRecherche}%`], (err, eleve) => {
+            if (!eleve) {
+                message.reply(`❌ Aucun élève trouvé sous le nom "${nomRecherche}".`);
+                return;
+            }
+
+            db.get(`SELECT id FROM paiements WHERE eleve_id = ? AND mois = ?`, [eleve.id, moisActuel], (err, row) => {
+                if (row) {
+                    message.reply(`ℹ️ *${eleve.nom}* a déjà payé pour ce mois (${moisActuel}).`);
+                } else {
+                    db.run(`INSERT INTO paiements (eleve_id, mois, montant_paye, date_paiement) VALUES (?, ?, ?, ?)`,
+                        [eleve.id, moisActuel, eleve.tarif_mensuel, new Date().toISOString().split('T')[0]], () => {
+                            message.reply(`💰 Paiement validé pour *${eleve.nom}* : *${eleve.tarif_mensuel} DH*.`);
+                        });
+                }
+            });
+        });
+    }
+});
+
+client.initialize();
+
+// --- API WEB ---
 app.get('/api/eleves', (req, res) => {
     const moisActuel = req.query.mois || new Date().toISOString().slice(0, 7);
     const query = `
@@ -85,5 +163,5 @@ app.post('/api/paiements', (req, res) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`L'application tourne sur : http://localhost:${PORT}`);
+    console.log(`Serveur prêt sur le port ${PORT}`);
 });
