@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Gestion Centre de Soutien</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #f4f6f9; margin: 0; padding: 20px; }
+        .container { max-width: 800px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        h1 { color: #2c3e50; text-align: center; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+        th { background-color: #3498db; color: white; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📚 Gestion du Centre de Soutien</h1>
+        <p>Bienvenue ! Les élèves ajoutés via WhatsApp apparaîtront ici automatiquement.</p>
+        <table>
+            <thead>
+                <tr>
+                    <th>Nom</th>
+                    <th>Niveau</th>
+                    <th>Tarif (DH)</th>
+                </tr>
+            </i>
+            </thead>
+            <tbody id="liste-eleves">
+                <tr><td colspan="3" style="text-align:center;">Chargement...</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        fetch('/api/eleves')
+            .then(res => res.json())
+            .then(data => {
+                const tbody = document.getElementById('liste-eleves');
+                if (data.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;">Aucun élève pour le moment. Envoyez un message sur WhatsApp (ex: <i>ajoute Youssef 2BAC 300</i>).</td></tr>';
+                    return;
+                }
+                tbody.innerHTML = data.map(e => `
+                    <tr>
+                        <td>${e.nom}</td>
+                        <td>${e.niveau}</td>
+                        <td>${e.tarif_mensuel} DH</td>
+                    </tr>
+                `).join('');
+            });
+    </script>
+</body>
+</html>
